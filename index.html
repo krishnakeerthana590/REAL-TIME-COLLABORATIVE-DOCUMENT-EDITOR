@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Universal File Editor & Downloader</title>
+  <style>
+    body {
+      background: #121d26;
+      color: #00ffcc;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    input[type="file"] {
+      display: block;
+      margin-bottom: 1rem;
+      color: #00ffcc;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 0.4rem;
+      border-radius: 4px;
+      border: 1px solid #00ffcc;
+      background: #203a43;
+      width: 300px;
+      font-size: 1rem;
+      outline: none;
+    }
+    #editor {
+      border: 2px solid #00ffcc;
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 300px;
+      max-height: 700px;
+      width: 90vw;
+      max-width: 900px;
+      resize: vertical;
+      overflow-y: auto;
+      background: #fff;
+      color: #000;
+      outline: none;
+      white-space: pre-wrap;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 1rem;
+      box-shadow: 0 0 10px #00ffcc88;
+      transition: box-shadow 0.3s ease;
+    }
+    #editor:focus {
+      box-shadow: 0 0 15px #00ffcc;
+    }
+    #editor:empty::before {
+      content: attr(data-placeholder);
+      color: #999;
+      pointer-events: none;
+      user-select: none;
+      display: block;
+      font-style: italic;
+    }
+    .buttons {
+      margin-top: 1rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 90vw;
+      max-width: 900px;
+    }
+    button {
+      padding: 0.6rem 1.2rem;
+      background: #00ffcc;
+      border: none;
+      border-radius: 6px;
+      color: #121d26;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      min-width: 120px;
+    }
+    button:hover:not(:disabled) {
+      background: #00cc99;
+    }
+    button:disabled {
+      background: #004d40;
+      cursor: not-allowed;
+      color: #666;
+    }
+    #fileName {
+      margin-top: 1rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #00ffcc;
+      text-align: center;
+      min-height: 1.3rem;
+      user-select: none;
+    }
+    #message {
+      margin-top: 0.5rem;
+      min-height: 1.2rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <input type="file" id="fileInput" accept=".txt,.html,.htm,.md">
+
+  <div id="fileName"></div>
+
+  <div id="editor" contenteditable="true" data-placeholder="Upload a file to edit here..."></div>
+
+  <div class="buttons">
+    <button id="saveBtn" disabled>Save to Computer</button>
+    <button id="clearBtn" disabled>Clear Editor</button>
+  </div>
+
+  <div id="message"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const editor = document.getElementById('editor');
+    const saveBtn = document.getElementById('saveBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const fileNameDisplay = document.getElementById('fileName');
+    const message = document.getElementById('message');
+
+    let currentFileName = '';
+    let lastSavedContent = '';
+
+    function showMessage(text, isError = false) {
+      message.textContent = text;
+      message.style.color = isError ? '#ff6666' : '#00ffcc';
+      setTimeout(() => message.textContent = '', 4000);
+    }
+
+    function saveDocumentLocally() {
+      if (!currentFileName) {
+        alert('No document to save!');
+        return;
+      }
+
+      const contentToSave = editor.innerHTML;
+
+      const blob = new Blob(
+        [`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${currentFileName}</title></head><body>${contentToSave}</body></html>`],
+        { type: 'text/html;charset=utf-8' }
+      );
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = currentFileName.endsWith('.html') ? currentFileName : currentFileName + '.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      lastSavedContent = contentToSave;
+      showMessage('File downloaded locally.');
+      saveBtn.disabled = true;
+    }
+
+    saveBtn.addEventListener('click', () => {
+      if (!confirm(`Download "${currentFileName}" to your computer?`)) return;
+      saveDocumentLocally();
+    });
+
+    editor.addEventListener('input', () => {
+      saveBtn.disabled = false;
+      clearBtn.disabled = false;
+    });
+
+    function onFileLoaded() {
+      lastSavedContent = editor.innerHTML;
+      saveBtn.disabled = true;
+      clearBtn.disabled = false;
+    }
+
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      const name = file.name.toLowerCase();
+
+      reader.onload = function(e) {
+        const content = e.target.result;
+
+        if (name.endsWith('.html') || name.endsWith('.htm') || name.endsWith('.txt') || name.endsWith('.md')) {
+          editor.innerHTML = content;
+        } else {
+          alert('Unsupported file type! Only .html, .htm, .txt, .md supported.');
+          resetEditor();
+          return;
+        }
+
+        currentFileName = file.name;
+        fileInput.value = '';
+        fileNameDisplay.textContent = `Editing: ${currentFileName}`;
+        editor.focus();
+        showMessage('File loaded from local.');
+        onFileLoaded();
+      };
+
+      reader.onerror = function() {
+        alert('Failed to read file!');
+      };
+
+      reader.readAsText(file);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      if (confirm('Clear editor content and reset? Unsaved changes will be lost.')) {
+        resetEditor();
+      }
+    });
+
+    function resetEditor() {
+      editor.innerHTML = '';
+      currentFileName = '';
+      lastSavedContent = '';
+      saveBtn.disabled = true;
+      clearBtn.disabled = true;
+      fileNameDisplay.textContent = '';
+      fileInput.value = '';
+      editor.focus();
+      message.textContent = '';
+    }
+  </script>
+</body>
+</html>
